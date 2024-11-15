@@ -2,7 +2,7 @@ import pandas as pd
 import ta
 
 # Список компаний
-companies = ["AAPL", "BLK", "CVX", "GS", "JPM", "KO", "MSFT", "XOM", "PG", "NVDA"]
+companies = ["AAPL"]
 
 # Добавление индикаторов технического анализа
 def add_technical_indicators(df):
@@ -31,17 +31,21 @@ def add_technical_indicators(df):
 
 # Пример: добавление индикаторов для каждой компании
 for company in companies:
-    # Загрузка данных для компании
-    filename = f"{company}_valid.csv"
-    df = pd.read_csv(filename)
+    # Загрузка данных компании
+    df = pd.read_csv(f"{company}_valid.csv")
     
-    # Преобразование дат
+    # Проверка наличия колонки 'Date'
+    if 'Date' not in df.columns:
+        raise KeyError(f"'Date' column is missing in the data for {company}")
+    
+    # Преобразование колонки 'Date' в формат datetime
     df['Date'] = pd.to_datetime(df['Date'])
+    
+    # Установка колонки 'Date' в качестве индекса
     df.set_index('Date', inplace=True)
     
-    # Добавление индикаторов
+    # Добавление технических индикаторов
     df = add_technical_indicators(df)
     
-    # Сохранение обратно в CSV
+    # Сохранение данных с индикаторами
     df.to_csv(f"{company}_valid.csv")
-    print(f"Индикаторы добавлены и сохранены для {company}")
