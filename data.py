@@ -1,33 +1,47 @@
-import yfinance as yf
 import pandas as pd
+import ta
 
-start_date = "2000-01-01"
-end_date = "2024-01-01"
+# Список компаний
+companies = ["AAPL", "BLK", "CVX", "GS", "JPM", "KO", "MSFT", "XOM", "PG", "NVDA"]
 
-company = "NVDA"
+# Добавление индикаторов технического анализа
+def add_technical_indicators(df):
+    """
+    Добавляет технические индикаторы в DataFrame с колонками ['Open', 'High', 'Low', 'Close', 'Volume'].
+    """
+    # Добавление скользящих средних
+    df['SMA_20'] = df['Close'].rolling(window=20).mean()
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    
+    # Индикатор RSI (Relative Strength Index)
+    df['RSI_14'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
+    
+    # MACD (Moving Average Convergence Divergence)
+    macd = ta.trend.MACD(close=df['Close'])
+    df['MACD'] = macd.macd()
+    df['MACD_signal'] = macd.macd_signal()
+    df['MACD_diff'] = macd.macd_diff()
+    
+    # Индикатор волатильности Bollinger Bands
+    bollinger = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2)
+    df['BB_upper'] = bollinger.bollinger_hband()
+    df['BB_lower'] = bollinger.bollinger_lband()
+    
+    return df
 
-# Download data
-data = yf.download(company, start=start_date, end=end_date, interval="1d")
-# Reset index to ensure 'Date' column is included
-data.reset_index(inplace=True)
-# Convert 'Date' column to date-only format
-data['Date'] = pd.to_datetime(data['Date']).dt.date
-# Add 'Company' column as the first column
-data.insert(0, 'Company', company)
-# Save to CSV file
-data.to_csv(f"{company}_historical_data.csv", index=False)
-
-# Load data from CSV file, skipping the second line
-data = pd.read_csv(f"{company}_historical_data.csv", skiprows=[1])
-
-# Debugging: Print columns to check if 'Date' column is present
-print(f"Columns in {company}_historical_data.csv: {data.columns}")
-
-# Ensure 'Date' column is present and convert it to datetime
-if 'Date' in data.columns:
-    data['Date'] = pd.to_datetime(data['Date']).dt.date
-else:
-    print(f"'Date' column not found in {company}_historical_data.csv")
-
-# Save the processed data back to CSV file
-data.to_csv(f"{company}_historical_data.csv", index=False)
+# Пример: добавление индикаторов для каждой компании
+for company in companies:
+    # Загрузка данных для компании
+    filename = f"{company}_valid.csv"
+    df = pd.read_csv(filename)
+    
+    # Преобразование дат
+    df['Date'] = pd.to_datetime(df['Date'])
+    df.set_index('Date', inplace=True)
+    
+    # Добавление индикаторов
+    df = add_technical_indicators(df)
+    
+    # Сохранение обратно в CSV
+    df.to_csv(f"{company}_valid.csv")
+    print(f"Индикаторы добавлены и сохранены для {company}")
