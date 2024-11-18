@@ -7,8 +7,8 @@ from keras.src.layers import Dense, Dropout, LSTM
 from keras.src.callbacks import EarlyStopping
 import matplotlib.pyplot as plt
 
-f_company_data = "PG_with_indicators.csv"
-f_valid_company_data = "PG_valid.csv"
+f_company_data = "data/PG_with_indicators.csv"
+f_valid_company_data = "data/PG_valid.csv"
 
 # Функция для объединения рыночных индексов и данных компании
 def merge_company_and_market_data(company_data, market_data):
@@ -20,7 +20,7 @@ def merge_company_and_market_data(company_data, market_data):
 
 # Загружаем тренировочные данные и данные индексов
 train_company_data = pd.read_csv(f_company_data)
-market_data = pd.read_csv("indexes.csv")
+market_data = pd.read_csv("data/indexes.csv")
 
 # Объединяем тренировочные данные
 train_data = merge_company_and_market_data(train_company_data, market_data)
