@@ -10,7 +10,7 @@ tickers = {
 }
 
 # Fetch the data
-data = yf.download(list(tickers.keys()), start="2024-01-01", end="2024-09-20", interval="1d")
+data = yf.download(list(tickers.keys()), start="1999-11-20", end="2024-09-20", interval="1d")
 
 # Remove the time, leaving just the date
 data.reset_index(inplace=True)
@@ -41,4 +41,4 @@ cols = ['Date'] + [f'Adj Close {ticker}' for ticker in tickers.keys()] + \
 combined_data = combined_data[cols]
 
 # Save the data to a CSV file named combined_data.csv
-combined_data.to_csv('data/pisyin.csv', index=False)
+combined_data.to_csv('data/indexes.csv', index=False)

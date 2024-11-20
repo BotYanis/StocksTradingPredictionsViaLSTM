@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import schedule
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ta.volatility import BollingerBands
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
@@ -22,30 +22,40 @@ def create_file_if_not_exists(ticker):
 def fetch_previous_candle_with_indicators(ticker, output_file):
     # Fetch latest price data
     stock = yf.Ticker(ticker)
-    hist = stock.history(period="1d", interval="5m")  # Keep enough data for indicators
+    hist = stock.history(period="1d", interval="5m")
     
     if hist.empty:
         print("No data available for the given ticker.")
         return None
 
-    # Calculate the target time for the previous candle (e.g., 20:40 if the current time is 20:49)
-    current_time = datetime.now()
-    target_time = (current_time - timedelta(minutes=10)).replace(second=0, microsecond=0)
+    # Current time in UTC
+    current_time = datetime.now(timezone.utc)
+    
+    # Round down to nearest 5 minutes
+    minutes = (current_time.minute // 5) * 5
+    target_time = current_time.replace(minute=minutes, second=0, microsecond=0) - timedelta(minutes=5)
+    
+    # Keep UTC timezone info
+    print(f"Target time UTC: {target_time}")
 
-    # Ensure target_time is timezone-naive to match hist.index
-    target_time = target_time.replace(tzinfo=None)
+    # Convert index to UTC if needed
+    if hist.index.tz is None:
+        hist.index = hist.index.tz_localize('UTC')
+    elif hist.index.tz != timezone.utc:
+        hist.index = hist.index.tz_convert('UTC')
 
-    # Ensure hist.index is timezone-naive
-    hist.index = hist.index.tz_localize(None)
-
-    # Find the candle closest to the target time
-    previous_candle = hist.loc[hist.index <= target_time].iloc[-2]
-    datetime_str = previous_candle.name.strftime('%Y-%m-%d %H:%M:%S')
-    open_price = previous_candle['Open']
-    high_price = previous_candle['High']
-    low_price = previous_candle['Low']
-    close_price = previous_candle['Close']
-    volume = previous_candle['Volume']
+    try:
+        # Find the candle closest to the target time
+        previous_candle = hist.loc[hist.index <= target_time].iloc[-1]
+        datetime_str = previous_candle.name.strftime('%Y-%m-%d %H:%M:%S')
+        open_price = previous_candle['Open']
+        high_price = previous_candle['High']
+        low_price = previous_candle['Low']
+        close_price = previous_candle['Close']
+        volume = previous_candle['Volume']
+    except IndexError:
+        print(f"Not enough data for {ticker}. Skipping.")
+        return None
 
     # Check if volume is zero and handle it
     if volume == 0:
@@ -130,4 +140,3 @@ def data_cleaning(file_path):
 # Example usage
 ticker = "AAPL"
 schedule_five_minute_fetch(ticker)
-

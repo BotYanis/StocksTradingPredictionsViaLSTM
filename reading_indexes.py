@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import schedule
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Список индексов
 indices = ['^GSPC', '^IXIC', '^DJI', '^RUT']
@@ -31,17 +31,20 @@ def create_file_if_not_exists():
 def fetch_previous_candle_with_indicators():
     global indices
 
-    # Словарь для данных
+    # Dictionary for data
     data = {}
 
-    # Текущие дата и время
-    current_time = datetime.now()
+    # Current time in UTC
+    current_time = datetime.now(timezone.utc)
+    
     # Round down to nearest 5 minutes
     minutes = (current_time.minute // 5) * 5
     target_time = current_time.replace(minute=minutes, second=0, microsecond=0) - timedelta(minutes=5)
-    target_time = target_time.replace(tzinfo=None)
+    
+    # Keep UTC timezone info
+    print(f"Target time UTC: {target_time}")
 
-    # Сбор данных для каждого индекса
+    # Collect data for each index
     for ticker in indices:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1d", interval="5m")
@@ -50,8 +53,11 @@ def fetch_previous_candle_with_indicators():
             print(f"No data available for {ticker}. Skipping.")
             continue
 
-        # Убираем временную зону
-        hist.index = hist.index.tz_localize(None)
+        # Convert index to UTC if needed
+        if hist.index.tz is None:
+            hist.index = hist.index.tz_localize('UTC')
+        elif hist.index.tz != timezone.utc:
+            hist.index = hist.index.tz_convert('UTC')
 
         try:
             # Получаем предыдущую свечу
