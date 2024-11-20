@@ -12,11 +12,11 @@ from collections import deque
 
 def load_and_preprocess_data(train_file, market_file):
     # Загрузка данных
-    company_data = pd.read_csv(train_file, parse_dates=['Date'])
-    market_data = pd.read_csv(market_file, parse_dates=['Date'])
+    company_data = pd.read_csv(train_file, parse_dates=['Datetime'])
+    market_data = pd.read_csv(market_file, parse_dates=['Datetime'])
 
     # Объединение данных компании с рынком по дате
-    merged_data = pd.merge(company_data, market_data, on='Date', how='inner')
+    merged_data = pd.merge(company_data, market_data, on='Datetime', how='inner')
 
     # Удаляем лишние столбцы, если нужно
     columns_to_use = [
@@ -24,7 +24,7 @@ def load_and_preprocess_data(train_file, market_file):
         'MACD', 'MACD_signal', 'MACD_diff', 'BB_upper', 'BB_lower',
         'Adj Close ^DJI', 'Adj Close ^GSPC', 'Adj Close ^IXIC', 'Adj Close ^RUT'
     ]
-    merged_data = merged_data[['Date'] + columns_to_use]
+    merged_data = merged_data[['Datetime'] + columns_to_use]
 
     # Нормализация данных
     scaler = MinMaxScaler()
@@ -56,14 +56,22 @@ def train_model(model, X_train, y_train, epochs=50, batch_size=32):
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, shuffle=False)
     return model
 
-def predict_and_update(model, live_data, market_live_data, scaler, sequence_length):
+def predict_and_update(model, live_data_file, market_live_file, scaler, sequence_length):
     # Загрузка и объединение текущих данных
-    live_data = pd.read_csv(live_data_file, parse_dates=['Date'])
-    market_live_data = pd.read_csv(market_live_file, parse_dates=['Date'])
-    live_merged = pd.merge(live_data, market_live_data, on='Date', how='inner')
+    live_data = pd.read_csv(live_data_file, parse_dates=['Datetime'])
+    market_live_data = pd.read_csv(market_live_file, parse_dates=['Datetime'])
+    live_merged = pd.merge(live_data, market_live_data, on='Datetime', how='inner')
+
+    # Удаляем лишние столбцы, если нужно
+    columns_to_use = [
+        'Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI_14',
+        'MACD', 'MACD_signal', 'MACD_diff', 'BB_upper', 'BB_lower',
+        'Adj Close ^DJI', 'Adj Close ^GSPC', 'Adj Close ^IXIC', 'Adj Close ^RUT'
+    ]
+    live_merged = live_merged[columns_to_use]
 
     # Нормализация
-    live_scaled = scaler.transform(live_merged.iloc[:, 1:])
+    live_scaled = scaler.transform(live_merged)
 
     # Создание последовательности для прогноза
     latest_sequence = live_scaled[-sequence_length:]
@@ -72,7 +80,14 @@ def predict_and_update(model, live_data, market_live_data, scaler, sequence_leng
     # Прогноз
     predicted_close = model.predict(latest_sequence)[0][0]
 
-    return predicted_close
+    # Получение фактической цены закрытия
+    actual_close = live_data['Close'].iloc[-1]
+
+    return predicted_close, latest_sequence, actual_close
+
+def update_model(model, X_new, y_new):
+    model.fit(X_new, y_new, epochs=1, batch_size=1, shuffle=False)
+    return model
 
 # Основной процесс
 company_name = "AAPL"
@@ -96,7 +111,6 @@ model = build_model((sequence_length, X.shape[2]))
 model = train_model(model, X_train, y_train, epochs=10, batch_size=32)
 
 # Цикл предсказаний и обновлений
-import time
 while True:
     predicted_close, latest_sequence, actual_close = predict_and_update(model, live_data_file, market_live_file, scaler, sequence_length)
     print(f"Предсказанная цена закрытия: {predicted_close}, Фактическая цена закрытия: {actual_close}")
@@ -106,7 +120,7 @@ while True:
     print(f"Ошибка предсказания: {error}")
 
     # Создаем новые данные для обновления модели
-    X_new = np.expand_dims(latest_sequence, axis=0)  # Последняя последовательность
+    X_new = latest_sequence  # Последняя последовательность уже имеет правильную форму
     y_new = np.array([actual_close])  # Фактическая цена закрытия
 
     # Обновление модели на основе нового наблюдения
