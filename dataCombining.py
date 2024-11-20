@@ -10,35 +10,35 @@ tickers = {
 }
 
 # Fetch the data
-data = yf.download(list(tickers.keys()), start="2000-01-01", end="2024-01-01")
+data = yf.download(list(tickers.keys()), start="2024-01-01", end="2024-09-20", interval="1d")
 
 # Remove the time, leaving just the date
 data.reset_index(inplace=True)
-data['Date'] = data['Date'].dt.date
+data['Date'] = data['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
 # Flatten the multi-index columns
 data.columns = [' '.join(col).strip() for col in data.columns.values]
-
-# Add a column for the index name
-def get_index_name(row):
-    for ticker, name in tickers.items():
-        if f'Adj Close {ticker}' in row.index:
-            return name
-    return None
 
 # Create a new DataFrame to store the combined data
 combined_data = pd.DataFrame()
 
 # Iterate over each ticker and append the data to the combined DataFrame
-for ticker, name in tickers.items():
+for ticker in tickers.keys():
     ticker_data = data[[col for col in data.columns if ticker in col] + ['Date']].copy()
-    ticker_data.columns = [col.replace(f' {ticker}', '') for col in ticker_data.columns]
-    ticker_data['Index'] = name
-    combined_data = pd.concat([combined_data, ticker_data])
+    ticker_data.columns = [col.replace(f' {ticker}', f' {ticker}') for col in ticker_data.columns]
+    if combined_data.empty:
+        combined_data = ticker_data
+    else:
+        combined_data = combined_data.merge(ticker_data, on='Date', how='outer')
 
 # Reorder the columns to match the specified order
-cols = ['Index', 'Date', 'Adj Close', 'Close', 'High', 'Low', 'Open', 'Volume']
+cols = ['Date'] + [f'Adj Close {ticker}' for ticker in tickers.keys()] + \
+       [f'Close {ticker}' for ticker in tickers.keys()] + \
+       [f'High {ticker}' for ticker in tickers.keys()] + \
+       [f'Low {ticker}' for ticker in tickers.keys()] + \
+       [f'Open {ticker}' for ticker in tickers.keys()] + \
+       [f'Volume {ticker}' for ticker in tickers.keys()]
 combined_data = combined_data[cols]
 
 # Save the data to a CSV file named combined_data.csv
-data.to_csv('indexes.csv', index=False)
+combined_data.to_csv('data/pisyin.csv', index=False)

@@ -2,9 +2,9 @@ import yfinance as yf
 import ta
 import os
 
-def get_stock_data_with_indicators(ticker, start_date="1999-10-20", end_date="2024-09-20"):
+def get_stock_data_with_indicators(ticker, start_date="2024-11-18", end_date="2024-11-20"):
     # Загрузка данных с помощью yfinance
-    data = yf.download(ticker, start=start_date, end=end_date, interval="1d")
+    data = yf.download(ticker, start=start_date, end=end_date, interval="5m")
     
     # Проверка, что данные загружены
     if data.empty:
@@ -47,12 +47,12 @@ if __name__ == "__main__":
     
     # Переупорядочивание столбцов
     stock_data.reset_index(inplace=True)  # Ensure 'Datetime' is a column
-    stock_data['Date'] = stock_data['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')  # Format 'Date' column
+    stock_data['Datetime'] = stock_data['Datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')  # Format 'Datetime' column
     
-    stock_data = stock_data[['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI_14', 'MACD', 'MACD_signal', 'MACD_diff', 'BB_upper', 'BB_lower']]
+    stock_data = stock_data[['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI_14', 'MACD', 'MACD_signal', 'MACD_diff', 'BB_upper', 'BB_lower']]
     
     # Сохранение данных в файл
-    file_path = f"data/{ticker}_with_indicators.csv"
+    file_path = f"data/{ticker}.csv"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     stock_data.to_csv(file_path, index=False)
     

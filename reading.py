@@ -108,10 +108,26 @@ def schedule_five_minute_fetch(ticker):
     schedule.every(5).minutes.do(fetch_previous_candle_with_indicators, ticker=ticker, output_file=output_file)
     print(f"Scheduled fetching data for {ticker} every 5 minutes.")
 
+    data_cleaning(output_file)
+
+    # Schedule popout the first row of the csv file every 5 minutes
+    schedule.every(5).minutes.do(data_cleaning, file_path=output_file)
+    print(f"Scheduled popout the first row of the csv file every 5 minutes.")
+
     while True:
         schedule.run_pending()
         time.sleep(1)
 
+# Function to popout the first row of the csv file
+def data_cleaning(file_path):
+    data = pd.read_csv(file_path)
+    data = data.drop(data.index[0], axis=0)
+    data.to_csv(file_path, index=False)
+    print(f"First row removed from {file_path}.")
+    return file_path 
+
+
 # Example usage
 ticker = "AAPL"
 schedule_five_minute_fetch(ticker)
+
