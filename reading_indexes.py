@@ -5,98 +5,95 @@ import schedule
 import time
 from datetime import datetime, timedelta
 
-# Define the tickers
-tickers = {
-    '^GSPC': 'S&P 500',
-    '^IXIC': 'NASDAQ',
-    '^DJI': 'Dow Jones',
-    '^RUT': 'Russell 2000'
-}
+# Список индексов
+indices = ['^GSPC', '^IXIC', '^DJI', '^RUT']
 
-# File to store combined data
-combined_file = "data/indexes_live_data.csv"
+# Файл для хранения данных
+output_file = "data/indexes_live_data.csv"
 
-# Ensure the combined file exists with the desired structure
-def create_combined_file():
-    if not os.path.exists("data"):
-        os.makedirs("data")
-    if not os.path.exists(combined_file):
-        cols = ['Date'] + \
-               [f'Adj Close {ticker}' for ticker in tickers.keys()] + \
-               [f'Close {ticker}' for ticker in tickers.keys()] + \
-               [f'High {ticker}' for ticker in tickers.keys()] + \
-               [f'Low {ticker}' for ticker in tickers.keys()] + \
-               [f'Open {ticker}' for ticker in tickers.keys()] + \
-               [f'Volume {ticker}' for ticker in tickers.keys()]
-        pd.DataFrame(columns=cols).to_csv(combined_file, index=False)
-        print(f"Combined file {combined_file} created.")
+# Создание файла, если он не существует
+def create_file_if_not_exists():
+    if not os.path.exists(output_file):
+        columns = [
+            "Datetime",
+            "Adj Close ^GSPC", "Adj Close ^IXIC", "Adj Close ^DJI", "Adj Close ^RUT",
+            "Close ^GSPC", "Close ^IXIC", "Close ^DJI", "Close ^RUT",
+            "High ^GSPC", "High ^IXIC", "High ^DJI", "High ^RUT",
+            "Low ^GSPC", "Low ^IXIC", "Low ^DJI", "Low ^RUT",
+            "Open ^GSPC", "Open ^IXIC", "Open ^DJI", "Open ^RUT",
+            "Volume ^GSPC", "Volume ^IXIC", "Volume ^DJI", "Volume ^RUT",
+        ]
+        pd.DataFrame(columns=columns).to_csv(output_file, index=False)
+        print(f"File {output_file} created.")
+    return output_file
 
-# Fetch and append data for all tickers
-def fetch_and_append_data():
-    combined_data = pd.read_csv(combined_file)
+# Функция для получения данных за предыдущую 5-минутную свечу
+def fetch_previous_candle_with_indicators():
+    global indices
 
-    # Create a new row with the current date and time
-    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    new_row = {'Date': datetime_str}
+    # Словарь для данных
+    data = {}
 
-    for ticker in tickers.keys():
-        # Fetch latest price data
+    # Текущие дата и время
+    current_time = datetime.now()
+    # Round down to nearest 5 minutes
+    minutes = (current_time.minute // 5) * 5
+    target_time = current_time.replace(minute=minutes, second=0, microsecond=0) - timedelta(minutes=5)
+    target_time = target_time.replace(tzinfo=None)
+
+    # Сбор данных для каждого индекса
+    for ticker in indices:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1d", interval="5m")
 
         if hist.empty:
-            print(f"No data available for the given ticker: {ticker}.")
+            print(f"No data available for {ticker}. Skipping.")
             continue
 
-        # Calculate the target time for the previous candle (e.g., 20:40 if the current time is 20:49)
-        current_time = datetime.now()
-        target_time = (current_time - timedelta(minutes=10)).replace(second=0, microsecond=0)
-
-        # Ensure target_time is timezone-naive to match hist.index
-        target_time = target_time.replace(tzinfo=None)
-
-        # Ensure hist.index is timezone-naive
+        # Убираем временную зону
         hist.index = hist.index.tz_localize(None)
 
-        # Find the candle closest to the target time
-        previous_candle = hist.loc[hist.index <= target_time].iloc[-2]
-        if previous_candle.empty:
-            print(f"No previous candle found for {ticker} at {target_time}.")
+        try:
+            # Получаем предыдущую свечу
+            previous_candle = hist.loc[hist.index <= target_time].iloc[-2]
+        except IndexError:
+            print(f"Not enough data for {ticker}. Skipping.")
             continue
 
-        # Extract data for the row
-        new_row[f'Adj Close {ticker}'] = previous_candle.get('Adj Close', None)
-        new_row[f'Close {ticker}'] = previous_candle['Close']
-        new_row[f'High {ticker}'] = previous_candle['High']
-        new_row[f'Low {ticker}'] = previous_candle['Low']
-        new_row[f'Open {ticker}'] = previous_candle['Open']
-        new_row[f'Volume {ticker}'] = previous_candle['Volume']
+        data[f"Adj Close {ticker}"] = previous_candle['Close']
+        data[f"Close {ticker}"] = previous_candle['Close']
+        data[f"High {ticker}"] = previous_candle['High']
+        data[f"Low {ticker}"] = previous_candle['Low']
+        data[f"Open {ticker}"] = previous_candle['Open']
+        data[f"Volume {ticker}"] = previous_candle['Volume']
 
-    # Add missing columns as NaN for consistency
-    for col in combined_data.columns:
-        if col not in new_row:
-            new_row[col] = None
+    # Добавляем общие данные
+    if data:
+        data["Datetime"] = target_time.strftime('%Y-%m-%d %H:%M:%S')
 
-    # Append the new row to the combined data
-    combined_data = pd.concat([combined_data, pd.DataFrame([new_row])], ignore_index=True)
-    combined_data.to_csv(combined_file, index=False)
-    print(f"Added new row: {new_row}")
+        # Загружаем существующий файл и добавляем новую строку
+        existing_data = pd.read_csv(output_file)
+        new_row = pd.DataFrame([data])
+        updated_data = pd.concat([existing_data, new_row], ignore_index=True)
+        updated_data.to_csv(output_file, index=False)
+        print(f"Added new data row: {data}")
+    else:
+        print("No data to add this time.")
 
-# Schedule fetching data every 5 minutes
+# Планирование сбора данных каждые 5 минут
 def schedule_five_minute_fetch():
-    create_combined_file()
+    create_file_if_not_exists()
+
+    # Немедленный сбор данных
+    fetch_previous_candle_with_indicators()
     
-    # Fetch data immediately when the program runs
-    fetch_and_append_data()
-    
-    # Schedule fetching data every 5 minutes
-    schedule.every(5).minutes.do(fetch_and_append_data)
-    print(f"Scheduled fetching data every 5 minutes.")
+    # Планирование
+    schedule.every(5).minutes.do(fetch_previous_candle_with_indicators)
+    print("Scheduled fetching data for indices every 5 minutes.")
 
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-# Main function to start the scheduler
-if __name__ == "__main__":
-    schedule_five_minute_fetch()
+# Запуск
+schedule_five_minute_fetch()
